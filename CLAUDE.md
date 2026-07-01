@@ -217,7 +217,12 @@ Bundled starter pack: upstream's bufo (~555KB) in `data/characters/bufo/` →
   advertising. **Pending manual**: passkey pairing + encrypted echo (needs an
   interactive OS pairing dialog — covered by nRF Connect or the final Claude
   Desktop pairing).
-- [ ] M4 — wire protocol + FSM + ASCII pets + LED per state
+- [x] M4 — wire protocol + FSM + ASCII pets + LED per state: verified 2026-07-01
+  via tools/test_protocol.py over USB serial, **13/13 checks**: busy(running>=3),
+  attention+prompt log, celebrate(completed), status/owner/name/species acks,
+  token level-up celebrate, unknown-cmd swallow, sleep after ~60s silence, wake on
+  data. NVS persistence proven across reflash (name/owner survived). fsTotal
+  3,080,192 = full littlefs partition. Visual check of pet animation pending Shai.
 - [ ] M6 — GIF playback of bundled bufo from LittleFS (spec numbering has no M5)
 - [ ] M7 — stats + BOOT input + LED polish + this file finalized
 
@@ -243,3 +248,7 @@ Bundled starter pack: upstream's bufo (~555KB) in `data/characters/bufo/` →
   winrt work fine once toggled.
 - NimBLE 2.x quirk vs Bluedroid: `onPassKeyDisplay()` asks US to return the passkey
   (we generate 6 random digits) instead of notifying us of a stack-chosen one.
+- Arduino `LittleFS.begin()` looks for a partition **named** "spiffs" by default —
+  ours is named "littlefs", so the label must be passed explicitly:
+  `LittleFS.begin(true, "/littlefs", 10, "littlefs")`. Symptom otherwise: silent
+  mount failure, fsTotal=0 in status ack.

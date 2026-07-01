@@ -24,3 +24,7 @@ bool displayInit();
 
 constexpr int SCREEN_W = 172;
 constexpr int SCREEN_H = 320;
+// Vertical layout: character on top, status strip, then message/approval area.
+constexpr int CHAR_REGION_H  = 140;
+constexpr int STATUS_STRIP_Y = 142;
+constexpr int HUD_TOP        = 158;

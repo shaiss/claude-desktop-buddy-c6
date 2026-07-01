@@ -14,6 +14,18 @@
 // desktop. Reconnects reuse the stored LTK.
 
 void bleInit(const char* deviceName);
+// Drain both transports (USB Serial + BLE), assemble newline-delimited JSON,
+// apply snapshots to tama and dispatch cmd/ack traffic (upstream dataPoll).
+void bridgePoll();
+// One JSON line + '\n' to BOTH transports (upstream sendCmd/_xAck behavior:
+// acks and permission decisions go everywhere; a clientless side just drops).
+void bridgeSendLine(const char* json);
+
+// Folder-push transfer status (for the install-progress screen).
+bool xferActive();
+uint32_t xferProgress();
+uint32_t xferTotal();
+
 bool bleConnected();       // a central is connected (regardless of pairing)
 bool bleSecure();          // current link is encrypted+authenticated
 // Non-zero while a pairing passkey should be on screen; cleared on auth
