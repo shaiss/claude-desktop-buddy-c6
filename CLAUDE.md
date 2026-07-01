@@ -231,8 +231,15 @@ Bundled starter pack: upstream's bufo (~555KB) in `data/characters/bufo/` →
 - [x] M7 — stats + BOOT input + LED polish: verified 2026-07-01, 10/10 input
   checks (approve emits `permission once` + heart on <5s, response latch, deny,
   appr/deny/velocity counting, pet cycle, demo toggle) + 13/13 protocol
-  regression. **Pending Shai (physical)**: BOOT button feel (short<800ms /
-  long>=800ms), LED cue colors, LCD look, and the real Claude Desktop pairing.
+  regression.
+- [x] **Real Claude Desktop pairing: CONFIRMED 2026-07-01.** Shai paired the
+  actual desktop app (developer mode) with the device: status acks show
+  `sec:true` (encrypted+authenticated link — passkey flow worked), the Hardware
+  Buddy window polls status every ~2s and consumes our acks, and Shai answered
+  real permission prompts from the BOOT button (appr=2 deny=1 vel=4 counted; a
+  live `heart -> idle` one-shot was captured right after a <5s approval). Heap
+  steady ~188KB over minutes of live encrypted traffic. Remaining eyeball-only
+  items (LED hues, LCD colors) presumed fine unless Shai says otherwise.
 
 ## Final architecture (as built)
 
