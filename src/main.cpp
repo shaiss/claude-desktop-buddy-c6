@@ -231,9 +231,13 @@ static void drawNoCharacter() {
 // ---------------------------------------------------------------------------
 
 void setup() {
+  // USB CDC delivers write bursts near-instantly; the default 256B RX buffer
+  // overflows while the loop is busy rendering (~20-40ms/frame), corrupting
+  // folder-push chunk lines. 4KB absorbs a burst until bridgePoll drains it.
+  Serial.setRxBufferSize(4096);
   Serial.begin(115200);
   delay(1500);
-  Serial.println("[boot] claude-desktop-buddy-c6 M4");
+  Serial.println("[boot] claude-desktop-buddy-c6");
 
   bool dispOk = displayInit();
   statsLoad();

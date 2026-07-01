@@ -223,7 +223,11 @@ Bundled starter pack: upstream's bufo (~555KB) in `data/characters/bufo/` →
   token level-up celebrate, unknown-cmd swallow, sleep after ~60s silence, wake on
   data. NVS persistence proven across reflash (name/owner survived). fsTotal
   3,080,192 = full littlefs partition. Visual check of pet animation pending Shai.
-- [ ] M6 — GIF playback of bundled bufo from LittleFS (spec numbering has no M5)
+- [x] M6 — GIF playback: verified 2026-07-01. Bundled bufo loads at boot (15 gifs),
+  frames decode at manifest FPS, 96x100 art centered at (38,20), idle carousel
+  rotates after 5s dwell, state changes swap GIFs live, `species:255` switches
+  GIF mode over the wire. Folder-push over USB serial: 17/17 files, exact byte
+  counts, char_end hot-reload, 5.9 KB/s. (Spec numbering has no M5.)
 - [ ] M7 — stats + BOOT input + LED polish + this file finalized
 
 ## Gotchas / decisions log
@@ -252,3 +256,8 @@ Bundled starter pack: upstream's bufo (~555KB) in `data/characters/bufo/` →
   ours is named "littlefs", so the label must be passed explicitly:
   `LittleFS.begin(true, "/littlefs", 10, "littlefs")`. Symptom otherwise: silent
   mount failure, fsTotal=0 in status ack.
+- USB CDC bursts overflow the default 256B HWCDC RX buffer while the loop renders
+  (~20-40ms/frame) — folder-push chunk lines arrived corrupted and were silently
+  dropped (no ack, sender timeout). Fix: `Serial.setRxBufferSize(4096)` BEFORE
+  `Serial.begin()`. Upstream never saw this: real 115200 UART self-paces. BLE path
+  was never affected (2KB ring + GATT flow control).
