@@ -33,6 +33,14 @@ static uint32_t napStartMs = 0;
 static uint8_t  msgScroll = 0;
 static uint16_t lastLineGen = 0;
 
+// Views, cycled by short press when no prompt is pending (upstream's A-button
+// screen cycle, collapsed to home/pet/help). Non-home views auto-return.
+enum View : uint8_t { VIEW_HOME, VIEW_PET, VIEW_HELP, VIEW_COUNT };
+static uint8_t  view = VIEW_HOME;
+static uint32_t viewChangedMs = 0;
+static const uint32_t VIEW_REVERT_MS = 20000;
+static const char* const VIEW_NAMES[VIEW_COUNT] = { "home", "pet", "help" };
+
 // ---------------------------------------------------------------------------
 // Button actions
 // ---------------------------------------------------------------------------
@@ -76,7 +84,9 @@ static void handleInput(InputEvent ev) {
       Serial.printf("[input] approved %s in %lus\n", tama.promptId, (unsigned long)tookS);
       if (tookS < 5) stateTriggerOneShot(P_HEART, 2000);
     } else {
-      nextPet();
+      view = (view + 1) % VIEW_COUNT;
+      viewChangedMs = millis();
+      Serial.printf("[view] %s\n", VIEW_NAMES[view]);
     }
   } else {   // INPUT_LONG
     if (inPrompt) {
@@ -84,8 +94,7 @@ static void handleInput(InputEvent ev) {
       statsOnDenial();
       Serial.printf("[input] denied %s\n", tama.promptId);
     } else {
-      dataSetDemo(!dataDemo());
-      Serial.printf("[input] demo %s\n", dataDemo() ? "on" : "off");
+      nextPet();
     }
   }
 }
@@ -203,10 +212,128 @@ static void drawApproval() {
   }
 }
 
+static void tinyHeart(int x, int y, bool filled, uint16_t col) {
+  if (filled) {
+    spr.fillCircle(x - 2, y, 2, col);
+    spr.fillCircle(x + 2, y, 2, col);
+    spr.fillTriangle(x - 4, y + 1, x + 4, y + 1, x, y + 5, col);
+  } else {
+    spr.drawCircle(x - 2, y, 2, col);
+    spr.drawCircle(x + 2, y, 2, col);
+    spr.drawLine(x - 4, y + 1, x, y + 5, col);
+    spr.drawLine(x + 4, y + 1, x, y + 5, col);
+  }
+}
+
+// Pet vitals card (upstream DISP_PET page 1): mood / fed / energy / level +
+// lifetime counters. Lives in the HUD area; the character stays full-size.
+static void drawPetCard() {
+  const Palette& p = characterPalette();
+  const uint16_t HOT = 0xFA20;
+  spr.fillRect(0, HUD_TOP, SCREEN_W, SCREEN_H - HUD_TOP, p.bg);
+  spr.setTextSize(1);
+  int y = HUD_TOP + 2;
+
+  // Header: whose pet + view marker
+  spr.setTextColor(p.text, p.bg);
+  spr.setCursor(4, y);
+  if (ownerName()[0]) spr.printf("%s's %s", ownerName(), petName());
+  else                spr.print(petName());
+  spr.setTextColor(p.textDim, p.bg);
+  spr.setCursor(SCREEN_W - 28, y);
+  spr.print("1/2");
+  y += 16;
+
+  spr.setTextColor(p.textDim, p.bg);
+  spr.setCursor(6, y - 2); spr.print("mood");
+  uint8_t mood = statsMoodTier();
+  uint16_t moodCol = (mood >= 3) ? 0xF800 : (mood >= 2) ? HOT : p.textDim;
+  for (int i = 0; i < 4; i++) tinyHeart(64 + i * 18, y + 2, i < mood, moodCol);
+  y += 20;
+
+  spr.setCursor(6, y - 2); spr.print("fed");
+  uint8_t fed = statsFedProgress();
+  for (int i = 0; i < 10; i++) {
+    int px = 48 + i * 12;
+    if (i < fed) spr.fillCircle(px, y + 1, 2, p.body);
+    else         spr.drawCircle(px, y + 1, 2, p.textDim);
+  }
+  y += 20;
+
+  spr.setCursor(6, y - 2); spr.print("energy");
+  uint8_t en = statsEnergyTier();
+  uint16_t enCol = (en >= 4) ? 0x07FF : (en >= 2) ? 0xFFE0 : HOT;
+  for (int i = 0; i < 5; i++) {
+    int px = 64 + i * 16;
+    if (i < en) spr.fillRect(px, y - 2, 12, 6, enCol);
+    else        spr.drawRect(px, y - 2, 12, 6, p.textDim);
+  }
+  y += 22;
+
+  spr.fillRoundRect(6, y - 2, 46, 14, 3, p.body);
+  spr.setTextColor(p.bg, p.body);
+  spr.setCursor(12, y + 1); spr.printf("Lv %u", stats().level);
+  y += 22;
+
+  spr.setTextColor(p.textDim, p.bg);
+  auto ln = [&](const char* fmt, auto... args) {
+    spr.setCursor(6, y); spr.printf(fmt, args...); y += 10;
+  };
+  ln("approved %u", stats().approvals);
+  ln("denied   %u", stats().denials);
+  uint32_t nap = stats().napSeconds;
+  ln("napped   %luh%02lum", (unsigned long)(nap / 3600), (unsigned long)((nap / 60) % 60));
+  auto tokFmt = [&](const char* label, uint32_t v) {
+    spr.setCursor(6, y);
+    if (v >= 1000000)   spr.printf("%s%lu.%luM", label, (unsigned long)(v / 1000000), (unsigned long)((v / 100000) % 10));
+    else if (v >= 1000) spr.printf("%s%lu.%luK", label, (unsigned long)(v / 1000), (unsigned long)((v / 100) % 10));
+    else                spr.printf("%s%lu", label, (unsigned long)v);
+    y += 10;
+  };
+  tokFmt("tokens   ", stats().tokens);
+  tokFmt("today    ", tama.tokensToday);
+}
+
+// Help view (upstream DISP_PET page 2, adapted to this board's controls
+// and BLE-driven sleep).
+static void drawHelp() {
+  const Palette& p = characterPalette();
+  spr.fillRect(0, HUD_TOP, SCREEN_W, SCREEN_H - HUD_TOP, p.bg);
+  spr.setTextSize(1);
+  int y = HUD_TOP + 2;
+  auto ln = [&](uint16_t c, const char* s) {
+    spr.setTextColor(c, p.bg); spr.setCursor(6, y); spr.print(s); y += 9;
+  };
+  auto gap = [&]() { y += 4; };
+
+  spr.setTextColor(p.textDim, p.bg);
+  spr.setCursor(SCREEN_W - 28, y);
+  spr.print("2/2");
+  y += 12;
+
+  ln(p.body,    "MOOD");
+  ln(p.textDim, " approve fast = up");
+  ln(p.textDim, " deny lots = down"); gap();
+
+  ln(p.body,    "FED");
+  ln(p.textDim, " 50K tokens =");
+  ln(p.textDim, " level up + confetti"); gap();
+
+  ln(p.body,    "ENERGY");
+  ln(p.textDim, " refills while asleep");
+  ln(p.textDim, " (no desktop linked)"); gap();
+
+  ln(p.body,    "BUTTON");
+  ln(p.textDim, " tap: screens/approve");
+  ln(p.textDim, " hold: next pet/deny");
+}
+
 // Recent-message area: wrapped transcript lines, newest at the bottom
 // (upstream drawHUD with more rows — the tall screen's dividend).
 static void drawHUD() {
   if (tama.promptId[0]) { drawApproval(); return; }
+  if (view == VIEW_PET)  { drawPetCard(); return; }
+  if (view == VIEW_HELP) { drawHelp(); return; }
   if (!settings().hud) return;
   const Palette& p = characterPalette();
   const int LH = 8;
@@ -363,9 +490,17 @@ void loop() {
     responseSent = false;
     if (tama.promptId[0]) {
       promptArrivedMs = now;
+      view = VIEW_HOME;   // jump to the approval panel no matter what was open
       Serial.printf("[prompt] id=%s tool=%s hint=%s\n",
                     tama.promptId, tama.promptTool, tama.promptHint);
     }
+  }
+
+  // Non-home views drift back after a while — it's a glanceable desk pet,
+  // not a dashboard someone forgot open.
+  if (view != VIEW_HOME && now - viewChangedMs > VIEW_REVERT_MS) {
+    view = VIEW_HOME;
+    Serial.println("[view] home (auto)");
   }
 
   handleInput(inputPoll());

@@ -63,8 +63,13 @@ Only two buttons exist: BOOT and RESET. So:
 
 |              | Prompt pending | Otherwise |
 | ------------ | -------------- | --------- |
-| **BOOT** tap | **approve** | next pet (GIF → 18 ASCII species → GIF) |
-| **BOOT** hold (≥ 0.8 s) | **deny** | demo mode on/off |
+| **BOOT** tap | **approve** | next view: home → pet vitals → help |
+| **BOOT** hold (≥ 0.8 s) | **deny** | next pet (GIF → 18 ASCII species → GIF) |
+
+The **pet vitals** view is upstream's pet page: mood hearts, fed pips,
+energy bars, level badge, and the approved/denied/napped/token counters.
+Non-home views drift back to home after 20 s. A permission prompt jumps
+straight to the approval panel from any view.
 
 ## The seven states
 
@@ -84,11 +89,15 @@ Necessitated by the hardware (no IMU, no side buttons, no PMIC, no buzzer):
 
 - **Sleep is BLE-connection-driven** instead of screen-off timers and
   face-down naps. Sleep time still feeds the `nap` stat; the backlight dims.
-- **BOOT button replaces the A/B buttons** (mapping above). The menu,
-  settings, info and pet-stats screens are gone; everything they set is
-  still reachable over the wire protocol (`status`, `species`, `name`, …).
-- **No shake-to-dizzy, no landscape clock, no battery telemetry** (the
-  status ack simply omits `bat`, which the protocol allows).
+- **BOOT button replaces the A/B buttons** (mapping above). The pet vitals
+  and help pages survive as button-cycled views; the menu, settings, and
+  info screens are gone — everything they set is still reachable over the
+  wire protocol (`status`, `species`, `name`, …), and demo mode moved to a
+  serial debug command (`!demo`).
+- **No shake-to-dizzy, no landscape clock, no battery telemetry** — this
+  board has no battery circuitry at all (no charger, no connector, no
+  VBAT sense), so the status ack omits `bat` entirely, which the protocol
+  allows; the Hardware Buddy window simply shows no battery section.
 - **The RGB LED is new** — upstream had a single red LED that blinked on
   attention; this board's WS2812 gets a cue per state (kept dim).
 - The taller screen adds a status strip (state / sessions / link / level)

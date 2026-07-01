@@ -159,9 +159,12 @@ Bundled starter pack: upstream's bufo (~555KB) in `data/characters/bufo/` →
    chosen by us in the same spirit; not in the spec list). Kept dim (~25% max).
    `s_led` setting gates it, on by default.
 2. **BOOT-button UX** (only button): prompt pending → short press = approve
-   ("once"), long press ≥800ms = deny. No prompt → short press = next pet
-   (upstream menu "ascii pet" cycle: GIF→species0→...→speciesN→GIF), long press =
-   demo mode toggle (upstream menu "demo"). No menu system, no info/pet pages.
+   ("once"), long press ≥800ms = deny. No prompt → short press = view cycle
+   (home → pet vitals → help, auto-home after 20s; prompt arrival forces home),
+   long press = next pet (GIF→species0→...→speciesN→GIF). Demo toggle lives on
+   the `!demo` serial debug line. Pet vitals view = upstream DISP_PET page 1
+   (mood/fed/energy/Lv + counters); help view = page 2 adapted. Menu, settings,
+   and info screens remain dropped (wire protocol covers what they set).
 3. **Sleep is BLE-driven** (no IMU): see state machine above. No shake→dizzy (dizzy
    still reachable via demo mode + clock schedules are dropped since no RTC/no
    charging detection... actually: no clock mode at all — it depended on AXP charge
@@ -232,6 +235,14 @@ Bundled starter pack: upstream's bufo (~555KB) in `data/characters/bufo/` →
   checks (approve emits `permission once` + heart on <5s, response latch, deny,
   appr/deny/velocity counting, pet cycle, demo toggle) + 13/13 protocol
   regression.
+- [x] **Parity follow-up 2026-07-01** (Shai's review): restored upstream's pet
+  vitals + help pages as button-cycled views (12/12 input checks, passing WITH
+  a live desktop connected — the suite is now robust to desktop heartbeats
+  clearing injected prompts). Battery question settled: docs.waveshare.com
+  confirms the non-touch LCD-1.47 has NO battery hardware (no charger IC, no
+  connector, no VBAT ADC) — `bat` omission from the status ack is forced by
+  physics, not laziness; REFERENCE.md permits it. (The Touch/1.9" siblings are
+  the ones with battery headers.)
 - [x] **Real Claude Desktop pairing: CONFIRMED 2026-07-01.** Shai paired the
   actual desktop app (developer mode) with the device: status acks show
   `sec:true` (encrypted+authenticated link — passkey flow worked), the Hardware

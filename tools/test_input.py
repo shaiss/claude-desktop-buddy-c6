@@ -85,23 +85,30 @@ lines = collect(2)
 check("second press swallowed (latch)",
       not any('"cmd":"permission"' in l for l in lines),
       "" if not any('"cmd":"permission"' in l for l in lines) else "resent!")
-# ... but it should have cycled the pet instead (no active prompt anymore)
-expect("latched press falls through to next-pet", lines, "[input] pet ->")
+# ... but it should have cycled the view instead (no active prompt anymore)
+expect("latched press falls through to view cycle", lines, "[view] ")
 
-# 3. new prompt -> !long denies
-send({"total": 2, "running": 1, "waiting": 1, "msg": "approve: Write",
-      "prompt": {"id": "req_in2", "tool": "Write", "hint": "main.cpp"}})
-collect(1.5)
-send_raw("!long")
-lines = collect(2.5)
-expect("deny emits permission deny", lines,
-       '{"cmd":"permission","id":"req_in2","decision":"deny"}')
+# 3. new prompt -> !long denies. A live desktop's heartbeats can clear an
+#    injected prompt within seconds (snapshot-without-prompt semantics), so
+#    act fast and retry once if we lose the race.
+denied = False
+for attempt in range(2):
+    send({"total": 2, "running": 1, "waiting": 1, "msg": "approve: Write",
+          "prompt": {"id": "req_in2", "tool": "Write", "hint": "main.cpp"}})
+    collect(0.8)
+    send_raw("!long")
+    lines = collect(2.5)
+    if any('"id":"req_in2","decision":"deny"' in l for l in lines):
+        denied = True
+        break
+check("deny emits permission deny", denied,
+      "" if denied else "lost race to live desktop twice")
 
 # clear prompt
 send({"total": 1, "running": 0, "waiting": 0, "msg": "idle"})
 collect(1)
 
-# 4. stats reflect one approval + one denial, velocity recorded
+# 4. stats reflect the approval (+ denial if it landed), velocity recorded
 send({"cmd": "status"})
 lines = collect(2)
 ok = False
@@ -109,23 +116,36 @@ detail = "no status ack"
 for l in lines:
     if '"ack":"status"' in l:
         st = json.loads(l)["data"]["stats"]
-        ok = st["appr"] == appr0 + 1 and st["deny"] == deny0 + 1
+        want_deny = deny0 + (1 if denied else 0)
+        ok = st["appr"] == appr0 + 1 and st["deny"] == want_deny
         detail = f"appr {appr0}->{st['appr']} deny {deny0}->{st['deny']} vel={st['vel']}"
         break
 check("stats counted approval+denial", ok, detail)
 
-# 5. !short with no prompt cycles pets
-send_raw("!short")
-lines = collect(1.5)
-expect("short press cycles pet", lines, "[input] pet ->")
+# 5. three short presses cycle through all three views exactly once each
+#    (rotation-invariant: a prompt arrival may have reset the view to home)
+seen = []
+for _ in range(3):
+    send_raw("!short")
+    for l in collect(1.2):
+        if l.startswith("[view] ") and "(auto)" not in l:
+            seen.append(l.split()[1])
+check("three presses -> three view changes", len(seen) == 3, str(seen))
+check("cycle covers pet/help/home once each",
+      sorted(seen) == ["help", "home", "pet"], str(seen))
 
-# 6. !long with no prompt toggles demo on; !long again off (exit via serial works)
+# 6. !long with no prompt cycles the pet
 send_raw("!long")
 lines = collect(2)
-expect("long press -> demo on", lines, "[input] demo on")
-send_raw("!long")
+expect("long press cycles pet", lines, "[input] pet ->")
+
+# 7. !demo toggles demo mode on and off (serial stays responsive in demo)
+send_raw("!demo")
 lines = collect(2)
-expect("long press -> demo off", lines, "[input] demo off")
+expect("!demo -> demo on", lines, "[debug] demo on")
+send_raw("!demo")
+lines = collect(2)
+expect("!demo -> demo off", lines, "[debug] demo off")
 
 print()
 fails = [n for n, ok in results if not ok]

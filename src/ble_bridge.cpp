@@ -473,12 +473,17 @@ struct LineBuf {
 
 static LineBuf<1024> _usbLine, _btLine;
 
-// Debug seam, USB only: "!short" / "!long" inject synthetic button events
-// so the approve/deny path is testable without a finger on BOOT. Non-'{'
-// lines are invisible to the JSON protocol by design.
+// Debug seam, USB only: "!short" / "!long" inject synthetic button events,
+// "!demo" toggles the fake-scenario carousel (upstream had it in the menu;
+// no button budget for it here). Non-'{' lines are invisible to the JSON
+// protocol by design.
 static void _debugLine(const char* line) {
   if (strcmp(line, "!short") == 0)     inputInject(INPUT_SHORT);
   else if (strcmp(line, "!long") == 0) inputInject(INPUT_LONG);
+  else if (strcmp(line, "!demo") == 0) {
+    dataSetDemo(!dataDemo());
+    Serial.printf("[debug] demo %s\n", dataDemo() ? "on" : "off");
+  }
 }
 
 void bridgePoll() {
