@@ -202,8 +202,14 @@ Bundled starter pack: upstream's bufo (~555KB) in `data/characters/bufo/` →
 
 ## Milestone log
 
-- [ ] M1 — hello world + RGB LED cycle (build, upload to COM12, boot line on monitor)
-- [ ] M2 — display bring-up (labeled RGB bars + circle + "buddy"; offset 34)
+- [x] M1 — hello world + RGB LED cycle: verified 2026-07-01. Serial liveness lines
+  + LED cycle running on device; free heap at idle ≈ 427KB (plenty for the 110KB
+  full-screen sprite). Board USB-dropped once mid-milestone and returned as COM13 —
+  hence VID-based port autodetection in tools/auto_port.py.
+- [x] M2 — display bring-up: code complete + running 2026-07-01 (sprite allocs
+  111,952B, pattern pushed, no hang; 311KB heap free after). **Visual check
+  pending Shai**: border on 4 edges = offset ok; bar colors match labels =
+  rgb_order/invert ok. Config gamble documented: `invert=true, rgb_order=false`.
 - [ ] M3 — NUS echo (advertise `Claude-XXXX`, echo RX→TX with `\r\n`)
 - [ ] M4 — wire protocol + FSM + ASCII pets + LED per state
 - [ ] M6 — GIF playback of bundled bufo from LittleFS (spec numbering has no M5)
