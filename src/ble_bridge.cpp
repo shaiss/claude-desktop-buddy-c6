@@ -8,6 +8,7 @@
 #include <sys/time.h>
 #include "state.h"
 #include "stats.h"
+#include "input.h"
 #include "characters/ascii_pets.h"
 #include "characters/gif_player.h"
 
@@ -395,6 +396,9 @@ static bool xferCommand(JsonDocument& doc) {
 // --- JSON application (upstream _applyJson) -----------------------------------
 
 static void _applyJson(const char* line, TamaState* out) {
+  // Demo mode ignores live data entirely (upstream semantics — their
+  // dataPoll early-returned before even reading the transports).
+  if (dataDemo()) return;
   JsonDocument doc;
   if (deserializeJson(doc, line)) return;
   if (xferCommand(doc)) { dataMarkLive(); return; }
@@ -469,15 +473,36 @@ struct LineBuf {
 
 static LineBuf<1024> _usbLine, _btLine;
 
-void bridgePoll() {
-  if (dataDemo()) { dataDemoTick(); return; }
+// Debug seam, USB only: "!short" / "!long" inject synthetic button events
+// so the approve/deny path is testable without a finger on BOOT. Non-'{'
+// lines are invisible to the JSON protocol by design.
+static void _debugLine(const char* line) {
+  if (strcmp(line, "!short") == 0)     inputInject(INPUT_SHORT);
+  else if (strcmp(line, "!long") == 0) inputInject(INPUT_LONG);
+}
 
-  while (Serial.available()) _usbLine.push((char)Serial.read(), &tama);
+void bridgePoll() {
+  // Transports drain unconditionally — even in demo mode — so the "!" debug
+  // seam (and demo exit) stay reachable; _applyJson discards JSON in demo.
+  while (Serial.available()) {
+    char c = (char)Serial.read();
+    if (c == '\n' || c == '\r') {
+      if (_usbLine.len > 0 && _usbLine.buf[0] == '!') {
+        _usbLine.buf[_usbLine.len] = 0;
+        _debugLine(_usbLine.buf);
+        _usbLine.len = 0;
+        continue;
+      }
+    }
+    _usbLine.push(c, &tama);
+  }
   while (bleAvailable()) {
     int c = bleRead();
     if (c < 0) break;
     _btLine.push((char)c, &tama);
   }
+
+  if (dataDemo()) { dataDemoTick(); return; }
 
   tama.connected = dataConnected();
   if (!tama.connected) {

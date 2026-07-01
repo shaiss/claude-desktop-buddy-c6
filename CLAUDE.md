@@ -228,7 +228,30 @@ Bundled starter pack: upstream's bufo (~555KB) in `data/characters/bufo/` →
   rotates after 5s dwell, state changes swap GIFs live, `species:255` switches
   GIF mode over the wire. Folder-push over USB serial: 17/17 files, exact byte
   counts, char_end hot-reload, 5.9 KB/s. (Spec numbering has no M5.)
-- [ ] M7 — stats + BOOT input + LED polish + this file finalized
+- [x] M7 — stats + BOOT input + LED polish: verified 2026-07-01, 10/10 input
+  checks (approve emits `permission once` + heart on <5s, response latch, deny,
+  appr/deny/velocity counting, pet cycle, demo toggle) + 13/13 protocol
+  regression. **Pending Shai (physical)**: BOOT button feel (short<800ms /
+  long>=800ms), LED cue colors, LCD look, and the real Claude Desktop pairing.
+
+## Final architecture (as built)
+
+One loop, ~60Hz: `bridgePoll()` drains USB-serial + BLE byte streams into
+newline-delimited JSON lines → `_applyJson()` mutates the single `TamaState` +
+dispatches cmd/ack (including folder push) → `stateTick()` derives the persona
+(upstream rules; BLE-driven sleep) and resolves one-shots → `handleInput()` maps
+BOOT events (approve/deny in prompt, pet-cycle/demo outside) → `ledTick()` +
+character render (ASCII `buddyTick` or GIF `characterTick`) into the full-screen
+sprite → status strip + HUD/approval/passkey panels → one `pushSprite`.
+
+Test seam: USB lines starting with `!` (`!short`, `!long`) inject synthetic
+button events — not part of the BLE protocol, invisible to JSON parsing, BLE
+path unaffected. tools/: test_protocol.py (13 checks), test_input.py (10),
+test_xfer.py (folder push), test_ble_scan.py (radio), monitor_once.py.
+
+Boot: display → NVS loads → buddyInit → LittleFS(label!) → characterInit scan →
+mode flags → bleInit(Claude-XXXX) → splash 1.8s. Sizes: ~910KB flash of 2.5MB
+slot, ~190KB heap free in GIF mode steady state.
 
 ## Gotchas / decisions log
 

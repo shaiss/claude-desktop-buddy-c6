@@ -8,6 +8,7 @@
 #include "state.h"
 #include "stats.h"
 #include "led.h"
+#include "input.h"
 #include "characters/ascii_pets.h"
 #include "characters/gif_player.h"
 
@@ -31,6 +32,63 @@ static uint32_t napStartMs = 0;
 
 static uint8_t  msgScroll = 0;
 static uint16_t lastLineGen = 0;
+
+// ---------------------------------------------------------------------------
+// Button actions
+// ---------------------------------------------------------------------------
+
+// Cycle GIF (if installed) -> ASCII species 0..N-1 -> GIF. Persisted to the
+// "species" NVS key; 0xFF means GIF mode. (Upstream's menu "next pet".)
+static void nextPet() {
+  uint8_t n = buddySpeciesCount();
+  if (!buddyMode) {                                         // GIF -> species 0
+    buddyMode = true;
+    buddySetSpeciesIdx(0);
+    speciesIdxSave(0);
+  } else if (buddySpeciesIdx() + 1 >= n && gifAvailable) {  // last -> GIF
+    buddyMode = false;
+    speciesIdxSave(SPECIES_GIF);
+  } else {
+    buddyNextSpecies();
+  }
+  characterInvalidate();
+  if (buddyMode) buddyInvalidate();
+  Serial.printf("[input] pet -> %s\n", buddyMode ? buddySpeciesName() : "GIF");
+}
+
+static void sendPermission(const char* decision) {
+  char cmd[96];
+  snprintf(cmd, sizeof(cmd), "{\"cmd\":\"permission\",\"id\":\"%s\",\"decision\":\"%s\"}",
+           tama.promptId, decision);
+  bridgeSendLine(cmd);
+  responseSent = true;
+}
+
+static void handleInput(InputEvent ev) {
+  if (ev == INPUT_NONE) return;
+  bool inPrompt = tama.promptId[0] && !responseSent;
+
+  if (ev == INPUT_SHORT) {
+    if (inPrompt) {
+      sendPermission("once");
+      uint32_t tookS = (millis() - promptArrivedMs) / 1000;
+      statsOnApproval(tookS);
+      Serial.printf("[input] approved %s in %lus\n", tama.promptId, (unsigned long)tookS);
+      if (tookS < 5) stateTriggerOneShot(P_HEART, 2000);
+    } else {
+      nextPet();
+    }
+  } else {   // INPUT_LONG
+    if (inPrompt) {
+      sendPermission("deny");
+      statsOnDenial();
+      Serial.printf("[input] denied %s\n", tama.promptId);
+    } else {
+      dataSetDemo(!dataDemo());
+      Serial.printf("[input] demo %s\n", dataDemo() ? "on" : "off");
+    }
+  }
+}
 
 // ---------------------------------------------------------------------------
 // HUD / panels
@@ -245,6 +303,7 @@ void setup() {
   petNameLoad();
   buddyInit();
   ledInit();
+  inputInit();
 
   // Format-on-fail: first boot has a blank littlefs partition. The partition
   // LABEL must be passed — begin() defaults to looking for one named "spiffs"
@@ -308,6 +367,8 @@ void loop() {
                     tama.promptId, tama.promptTool, tama.promptHint);
     }
   }
+
+  handleInput(inputPoll());
 
   PersonaState st = stateActive();
   ledTick(st);
