@@ -210,7 +210,13 @@ Bundled starter pack: upstream's bufo (~555KB) in `data/characters/bufo/` →
   111,952B, pattern pushed, no hang; 311KB heap free after). **Visual check
   pending Shai**: border on 4 edges = offset ok; bar colors match labels =
   rgb_order/invert ok. Config gamble documented: `invert=true, rgb_order=false`.
-- [ ] M3 — NUS echo (advertise `Claude-XXXX`, echo RX→TX with `\r\n`)
+- [x] M3 — NUS echo: radio-verified 2026-07-01 with the PC's own BT adapter
+  (bleak): scan sees `Claude-F0D6` + NUS UUID in advertisement, connect logs
+  `[ble] connected`/`mtu=517`, unauthenticated RX write rejected with ATT
+  "Insufficient Authentication" (encryption gate works), disconnect resumes
+  advertising. **Pending manual**: passkey pairing + encrypted echo (needs an
+  interactive OS pairing dialog — covered by nRF Connect or the final Claude
+  Desktop pairing).
 - [ ] M4 — wire protocol + FSM + ASCII pets + LED per state
 - [ ] M6 — GIF playback of bundled bufo from LittleFS (spec numbering has no M5)
 - [ ] M7 — stats + BOOT input + LED polish + this file finalized
@@ -229,3 +235,11 @@ Bundled starter pack: upstream's bufo (~555KB) in `data/characters/bufo/` →
   freshest — i.e. code treats newest as LAST. We mirror code, not doc (guardrail:
   src/ behavior wins). Cited ambiguity per instructions.
 - `spr` extern in species files is vestigial upstream (never used) — dropped in port.
+- TWO physical boards exist: original `10:51:DB:3B:04:E4` (BT name would be
+  Claude-04E5 — already paired to this PC once!) and current `AC:EB:E6:1D:F0:D4`
+  (= Claude-F0D6). All M1+ verification ran on the current one. USB serial = base MAC.
+- This PC's Intel BT LE scanner can wedge (watcher starts, zero advertisements
+  forever). Fix: WinRT radio off/on toggle — see git history of tools/. bleak 3.x +
+  winrt work fine once toggled.
+- NimBLE 2.x quirk vs Bluedroid: `onPassKeyDisplay()` asks US to return the passkey
+  (we generate 6 random digits) instead of notifying us of a stack-chosen one.
